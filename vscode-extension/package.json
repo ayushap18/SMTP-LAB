@@ -1,0 +1,63 @@
+{
+  "name": "smtp-lab",
+  "displayName": "SMTP Lab",
+  "description": "Test SMTP servers, debug email delivery, and view detailed handshake logs — powered by Rust.",
+  "version": "0.1.0",
+  "publisher": "smtp-lab",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing",
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "smtpLab.openPanel",
+        "title": "SMTP Lab: Open Testing Panel"
+      },
+      {
+        "command": "smtpLab.quickTest",
+        "title": "SMTP Lab: Quick Test"
+      }
+    ],
+    "configuration": {
+      "title": "SMTP Lab",
+      "properties": {
+        "smtpLab.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the smtp-test binary. Leave empty to use the bundled or PATH binary."
+        },
+        "smtpLab.defaultHost": {
+          "type": "string",
+          "default": "",
+          "description": "Default SMTP host for quick tests."
+        },
+        "smtpLab.defaultPort": {
+          "type": "number",
+          "default": 587,
+          "description": "Default SMTP port."
+        },
+        "smtpLab.defaultEncryption": {
+          "type": "string",
+          "enum": ["starttls", "ssl", "none"],
+          "default": "starttls",
+          "description": "Default encryption mode."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}

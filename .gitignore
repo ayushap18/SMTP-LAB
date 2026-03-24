@@ -1,0 +1,7 @@
+/target
+desktop-app/src-tauri/target
+desktop-app/src-tauri/gen
+vscode-extension/node_modules
+vscode-extension/out
+*.vsix
+.DS_Store

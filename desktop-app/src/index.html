@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SMTP Lab</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div class="header-title">
+      <h1>SMTP Lab</h1>
+      <span class="version">v0.1.0</span>
+    </div>
+    <p class="subtitle">SMTP Testing &amp; Diagnostics</p>
+  </header>
+
+  <main>
+    <!-- Left Panel: Input Form -->
+    <section class="panel form-panel">
+      <h2>Connection</h2>
+      <div class="form-row">
+        <div class="form-group flex-2">
+          <label for="host">Host</label>
+          <input type="text" id="host" placeholder="smtp.gmail.com" />
+        </div>
+        <div class="form-group flex-1">
+          <label for="port">Port</label>
+          <input type="number" id="port" value="587" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group flex-1">
+          <label for="encryption">Encryption</label>
+          <select id="encryption">
+            <option value="starttls" selected>STARTTLS</option>
+            <option value="ssl">SSL/TLS</option>
+            <option value="none">None</option>
+          </select>
+        </div>
+        <div class="form-group flex-1">
+          <label for="timeout">Timeout (s)</label>
+          <input type="number" id="timeout" value="30" min="5" max="120" />
+        </div>
+      </div>
+
+      <h2>Authentication</h2>
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="user@example.com" />
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="App password recommended" />
+      </div>
+
+      <h2>Message</h2>
+      <div class="form-group">
+        <label for="from">From</label>
+        <input type="email" id="from" placeholder="sender@example.com" />
+      </div>
+      <div class="form-group">
+        <label for="to">To</label>
+        <input type="email" id="to" placeholder="recipient@example.com" />
+      </div>
+      <div class="form-group">
+        <label for="subject">Subject</label>
+        <input type="text" id="subject" value="SMTP Lab Test Email" />
+      </div>
+      <div class="form-group">
+        <label for="body">Body</label>
+        <textarea id="body" rows="3">This is a test email sent by SMTP Lab.</textarea>
+      </div>
+
+      <div class="actions">
+        <button id="btn-test" class="btn btn-primary">Send Test Email</button>
+        <button id="btn-diagnose" class="btn btn-secondary">Run Diagnostics</button>
+      </div>
+    </section>
+
+    <!-- Right Panel: Live Logs -->
+    <section class="panel log-panel">
+      <div class="log-header">
+        <h2>Live Logs</h2>
+        <button id="btn-clear" class="btn btn-small">Clear</button>
+      </div>
+      <div id="log-container" class="log-container">
+        <div class="log-entry log-info">
+          <span class="log-time">--:--:--.---</span>
+          <span class="log-level">[INFO]</span>
+          <span class="log-stage">READY</span>
+          <span class="log-msg">SMTP Lab ready. Configure and click "Send Test Email".</span>
+        </div>
+      </div>
+      <div id="status-bar" class="status-bar">
+        <span id="status-text">Idle</span>
+        <span id="status-elapsed"></span>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

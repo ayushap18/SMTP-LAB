@@ -1,0 +1,21 @@
+[package]
+name = "smtp-lab-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SMTP Lab Desktop Application"
+
+[lib]
+name = "smtp_lab_desktop"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+smtp-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
