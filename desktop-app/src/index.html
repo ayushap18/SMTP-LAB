@@ -191,20 +191,116 @@
         </div>
 
         <div class="tab-content" id="tab-test-batch">
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8l-2 4h12z"/></svg>
-            <h3>Batch Testing</h3>
-            <p>Send test emails to multiple recipients or through multiple servers simultaneously.</p>
-            <p class="coming-soon">Coming soon</p>
+          <div class="batch-toolbar">
+            <button id="btn-batch-add" class="btn btn-secondary btn-sm">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Row
+            </button>
+            <button id="btn-batch-run" class="btn btn-primary btn-sm">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run All
+            </button>
+            <button id="btn-batch-clear" class="btn btn-secondary btn-sm">Clear</button>
+            <div class="btn-dropdown">
+              <button id="btn-batch-export" class="btn btn-secondary btn-sm">Export &#9660;</button>
+              <div id="batch-export-menu" class="dropdown-menu" style="display:none;">
+                <button id="btn-batch-export-csv">Export CSV</button>
+                <button id="btn-batch-export-json">Export JSON</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="batch-table-wrap">
+            <table class="data-table batch-table" id="batch-table" style="display:none;">
+              <thead>
+                <tr>
+                  <th style="width:36px">#</th>
+                  <th>Host</th>
+                  <th style="width:70px">Port</th>
+                  <th style="width:100px">Enc</th>
+                  <th>Username</th>
+                  <th>Password</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Subject</th>
+                  <th style="width:80px">Status</th>
+                  <th style="width:70px">Latency</th>
+                  <th style="width:36px"></th>
+                </tr>
+              </thead>
+              <tbody id="batch-tbody"></tbody>
+            </table>
+            <div id="batch-empty" class="empty-state">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8l-2 4h12z"/></svg>
+              <h3>No Batch Jobs</h3>
+              <p>Click <strong>Add Row</strong> to add SMTP jobs, then <strong>Run All</strong> to test them in parallel.</p>
+            </div>
+          </div>
+
+          <div id="batch-summary" class="batch-summary" style="display:none;">
+            <span>Total: <strong id="bs-total">0</strong></span>
+            <span class="bs-sep">|</span>
+            <span class="bs-passed">Passed: <strong id="bs-passed">0</strong></span>
+            <span class="bs-sep">|</span>
+            <span class="bs-failed">Failed: <strong id="bs-failed">0</strong></span>
+            <span class="bs-sep">|</span>
+            <span>Avg Latency: <strong id="bs-avg">&#8212;</strong></span>
           </div>
         </div>
 
         <div class="tab-content" id="tab-test-monitor">
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            <h3>Connection Monitor</h3>
-            <p>Monitor SMTP server availability and response times over time.</p>
-            <p class="coming-soon">Coming soon</p>
+          <div class="monitor-toolbar">
+            <button id="btn-monitor-add" class="btn btn-secondary btn-sm">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Server
+            </button>
+            <label class="toolbar-label">Interval:</label>
+            <select id="monitor-interval" class="select-sm">
+              <option value="30000">30s</option>
+              <option value="60000" selected>1m</option>
+              <option value="300000">5m</option>
+              <option value="600000">10m</option>
+            </select>
+            <button id="btn-monitor-start-all" class="btn btn-primary btn-sm">Start All</button>
+            <button id="btn-monitor-stop-all" class="btn btn-secondary btn-sm">Stop All</button>
+          </div>
+
+          <div id="monitor-grid" class="monitor-grid">
+            <div id="monitor-empty" class="empty-state" style="grid-column:1/-1;">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              <h3>No Servers</h3>
+              <p>Click <strong>Add Server</strong> to monitor SMTP server connectivity over time.</p>
+            </div>
+          </div>
+
+          <!-- Add Server modal -->
+          <div id="monitor-add-modal" class="modal-overlay" style="display:none;">
+            <div class="modal-card">
+              <div class="card-header">
+                <h3>Add Server</h3>
+                <button id="btn-monitor-modal-close" class="btn-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <div class="form-group">
+                <label for="mon-name">Name</label>
+                <input type="text" id="mon-name" placeholder="e.g. Gmail SMTP" />
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-2">
+                  <label for="mon-host">Host</label>
+                  <input type="text" id="mon-host" placeholder="smtp.gmail.com" spellcheck="false" />
+                </div>
+                <div class="form-group flex-1">
+                  <label for="mon-port">Port</label>
+                  <input type="number" id="mon-port" value="587" />
+                </div>
+              </div>
+              <div class="form-actions">
+                <button id="btn-monitor-modal-save" class="btn btn-primary">Add Server</button>
+                <button id="btn-monitor-modal-cancel" class="btn btn-secondary">Cancel</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -455,6 +551,7 @@
     </div><!-- /.main-area -->
   </div><!-- /.app-shell -->
 
+  <script src="chart.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

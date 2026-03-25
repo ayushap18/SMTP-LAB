@@ -6,7 +6,11 @@ use smtp_core::{
 };
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::io::{BufRead, BufReader, Write as IoWrite};
+use std::net::{Shutdown, TcpStream, ToSocketAddrs};
+use std::time::{Duration, Instant};
 use tauri::State;
+use tokio::task::spawn_blocking;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
 
@@ -146,6 +150,15 @@ pub struct SmtpTestOutput {
     pub diagnostics: Option<DiagResult>,
 }
 
+/// Result of a lightweight SMTP connectivity ping (no auth, no email).
+#[derive(Debug, Serialize)]
+pub struct PingResult {
+    pub reachable: bool,
+    pub latency_ms: u64,
+    pub banner: String,
+    pub error: Option<String>,
+}
+
 fn parse_encryption(s: &str) -> Encryption {
     match s.to_lowercase().as_str() {
         "ssl" | "tls" => Encryption::Ssl,
@@ -247,6 +260,97 @@ async fn smtp_diagnose(
 
     let tester = SmtpTester::new(config, logger);
     Ok(tester.diagnose().await)
+}
+
+/// TCP + EHLO connectivity check. No auth, no email sent.
+/// Timer: starts after connect, stops after reading EHLO response (excludes QUIT).
+#[tauri::command]
+async fn smtp_ping(host: String, port: u16) -> Result<PingResult, String> {
+    spawn_blocking(move || {
+        let addr_str = format!("{host}:{port}");
+        let addr = match addr_str.to_socket_addrs() {
+            Ok(mut iter) => match iter.next() {
+                Some(a) => a,
+                None => return PingResult {
+                    reachable: false, latency_ms: 0,
+                    banner: String::new(),
+                    error: Some("Could not resolve hostname".into()),
+                },
+            },
+            Err(e) => return PingResult {
+                reachable: false, latency_ms: 0,
+                banner: String::new(),
+                error: Some(format!("DNS error: {e}")),
+            },
+        };
+
+        let start = Instant::now();
+
+        let stream = match TcpStream::connect_timeout(&addr, Duration::from_secs(5)) {
+            Ok(s) => s,
+            Err(e) => return PingResult {
+                reachable: false, latency_ms: 0,
+                banner: String::new(),
+                error: Some(format!("Connection failed: {e}")),
+            },
+        };
+
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
+
+        let mut reader = BufReader::new(match stream.try_clone() {
+            Ok(s) => s,
+            Err(e) => return PingResult {
+                reachable: false, latency_ms: 0,
+                banner: String::new(),
+                error: Some(format!("Stream clone error: {e}")),
+            },
+        });
+        let mut stream_w = stream;
+
+        // Read SMTP banner
+        let mut banner = String::new();
+        if let Err(e) = reader.read_line(&mut banner) {
+            return PingResult {
+                reachable: false, latency_ms: 0,
+                banner: String::new(),
+                error: Some(format!("Banner read error: {e}")),
+            };
+        }
+
+        // Send EHLO
+        if let Err(e) = stream_w.write_all(b"EHLO smtplab\r\n") {
+            return PingResult {
+                reachable: false, latency_ms: 0,
+                banner: banner.trim().to_string(),
+                error: Some(format!("EHLO write error: {e}")),
+            };
+        }
+
+        // Read EHLO response (SMTP multi-line: "250-" continues, "250 " is last)
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).is_err() { break; }
+            if line.len() >= 4 && &line[3..4] == " " { break; }
+            if line.len() < 4 { break; }
+        }
+
+        // Stop timer here — latency covers connect + banner + EHLO response
+        let latency_ms = start.elapsed().as_millis() as u64;
+
+        // Clean disconnect
+        let _ = stream_w.write_all(b"QUIT\r\n");
+        let _ = stream_w.shutdown(Shutdown::Both);
+
+        PingResult {
+            reachable: true,
+            latency_ms,
+            banner: banner.trim().to_string(),
+            error: None,
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -416,6 +520,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             smtp_test,
             smtp_diagnose,
+            smtp_ping,
             list_profiles,
             save_profile,
             delete_profile,

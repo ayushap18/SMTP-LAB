@@ -53,7 +53,15 @@ let templates       = [];
 let historyData     = [];
 let profiles        = [];
 let activeProfile   = null;
+// Batch
+let batchRows    = [];
+let batchRunning = false;
 let editingTemplate = null; // null = new, string = editing name
+
+// Monitor
+let monitorServers      = [];
+let notificationsDenied = false;
+let relativeTimeTicker  = null;
 
 // ---------------------------------------------------------------------------
 // Initialisation
@@ -70,6 +78,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupDnsPage();
   setupSettingsPage();
   setupTheme();
+  setupBatchPage();
+  setupMonitorPage();
   await loadProfiles();
   await loadHistory();
 });
@@ -349,6 +359,7 @@ async function runTest() {
     showToast(friendlyError(err), "error");
   } finally {
     setLoading(false);
+    await loadHistory();
   }
 }
 
@@ -588,6 +599,7 @@ function setupHistoryPage() {
 async function loadHistory() {
   try {
     historyData = await invoke("list_history", { limit: 200 });
+    historyData.forEach(h => { if (!h.id) h.id = crypto.randomUUID(); });
   } catch { historyData = []; }
   refreshHistoryTable();
 }
@@ -612,14 +624,14 @@ function refreshHistoryTable() {
   historyEmpty.style.display = "none";
 
   historyTbody.innerHTML = filtered.map((h, i) => `
-    <tr>
+    <tr data-id="${h.id}">
       <td>${formatDate(h.timestamp)}</td>
       <td style="font-family:var(--font-mono);font-size:12px;">${escapeHtml(h.host)}:${h.port}</td>
       <td style="font-size:12px;">${escapeHtml(h.from)} &rarr; ${escapeHtml(h.to)}</td>
       <td><span class="status-badge ${h.success ? 'success' : 'error'}">${h.success ? 'Success' : 'Failed'}</span></td>
       <td style="font-family:var(--font-mono);font-size:12px;">${h.elapsed_ms}ms</td>
       <td>
-        <button class="expand-btn" data-index="${i}" onclick="toggleHistoryDetail(this, ${i})">
+        <button class="expand-btn" onclick="toggleHistoryDetail(this, '${h.id}')">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </td>
@@ -627,7 +639,7 @@ function refreshHistoryTable() {
   `).join("");
 }
 
-window.toggleHistoryDetail = function (btn, index) {
+window.toggleHistoryDetail = function (btn, id) {
   const tr = btn.closest("tr");
   const existing = tr.nextElementSibling;
   if (existing && existing.classList.contains("history-detail-row")) {
@@ -637,7 +649,8 @@ window.toggleHistoryDetail = function (btn, index) {
   }
 
   btn.classList.add("expanded");
-  const h = historyData[index];
+  const h = historyData.find(entry => entry.id === id);
+  if (!h) return;
   const detailRow = document.createElement("tr");
   detailRow.className = "history-detail-row";
   const td = document.createElement("td");
@@ -665,6 +678,588 @@ window.toggleHistoryDetail = function (btn, index) {
   detailRow.appendChild(td);
   tr.after(detailRow);
 };
+
+// ---------------------------------------------------------------------------
+// Batch Page
+// ---------------------------------------------------------------------------
+function setupBatchPage() {
+  $("#btn-batch-add").addEventListener("click", addBatchRow);
+  $("#btn-batch-run").addEventListener("click", runBatch);
+  $("#btn-batch-clear").addEventListener("click", clearBatch);
+
+  $("#btn-batch-export").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const menu = $("#batch-export-menu");
+    menu.style.display = menu.style.display === "none" ? "" : "none";
+  });
+  document.addEventListener("click", () => {
+    const menu = $("#batch-export-menu");
+    if (menu) menu.style.display = "none";
+  });
+  $("#btn-batch-export-csv").addEventListener("click",  () => exportBatch("csv"));
+  $("#btn-batch-export-json").addEventListener("click", () => exportBatch("json"));
+}
+
+function addBatchRow() {
+  const id = crypto.randomUUID();
+  batchRows.push({
+    id, host: "", port: 587, enc: "starttls",
+    user: "", pass: "", from: "", to: "",
+    subject: "SMTP Lab Batch Test",
+    status: "idle", result: null,
+  });
+  renderBatchTable();
+}
+
+function clearBatch() {
+  batchRows = [];
+  batchRunning = false;
+  renderBatchTable();
+  $("#batch-summary").style.display = "none";
+}
+
+function renderBatchTable() {
+  const tbody  = $("#batch-tbody");
+  const empty  = $("#batch-empty");
+  const table  = $("#batch-table");
+  if (batchRows.length === 0) {
+    tbody.innerHTML = "";
+    empty.style.display  = "";
+    table.style.display  = "none";
+    return;
+  }
+  empty.style.display = "none";
+  table.style.display = "";
+
+  tbody.innerHTML = batchRows.map((r, i) => `
+    <tr data-batch-id="${r.id}">
+      <td style="color:var(--text-dim);font-size:12px;text-align:center;">${i + 1}</td>
+      <td><input type="text"     class="bi-host"    value="${escapeHtml(r.host)}"    placeholder="smtp.example.com" /></td>
+      <td><input type="number"   class="bi-port"    value="${r.port}" /></td>
+      <td>
+        <select class="bi-enc">
+          <option value="starttls" ${r.enc === "starttls" ? "selected" : ""}>STARTTLS</option>
+          <option value="ssl"      ${r.enc === "ssl"      ? "selected" : ""}>SSL</option>
+          <option value="none"     ${r.enc === "none"     ? "selected" : ""}>None</option>
+        </select>
+      </td>
+      <td><input type="text"     class="bi-user"    value="${escapeHtml(r.user)}"    placeholder="user@example.com" /></td>
+      <td><input type="password" class="bi-pass"    value="${escapeHtml(r.pass)}"    placeholder="password" /></td>
+      <td><input type="email"    class="bi-from"    value="${escapeHtml(r.from)}"    placeholder="from@example.com" /></td>
+      <td><input type="email"    class="bi-to"      value="${escapeHtml(r.to)}"      placeholder="to@example.com" /></td>
+      <td><input type="text"     class="bi-subject" value="${escapeHtml(r.subject)}" placeholder="Subject" /></td>
+      <td style="text-align:center;" class="batch-status-cell">
+        <span class="batch-status-dot"></span>
+      </td>
+      <td style="font-family:var(--font-mono);font-size:12px;text-align:right;" class="batch-latency-cell">—</td>
+      <td>
+        <button class="expand-btn" onclick="toggleBatchDetail(this, '${r.id}')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </td>
+    </tr>
+  `).join("");
+
+  tbody.querySelectorAll("tr[data-batch-id]").forEach((tr) => {
+    const rowId = tr.dataset.batchId;
+    const row = batchRows.find(r => r.id === rowId);
+    if (!row) return;
+    tr.querySelector(".bi-host").addEventListener("change",    e => { row.host    = e.target.value; });
+    tr.querySelector(".bi-port").addEventListener("change",    e => { row.port    = parseInt(e.target.value) || 587; });
+    tr.querySelector(".bi-enc").addEventListener("change",     e => { row.enc     = e.target.value; });
+    tr.querySelector(".bi-user").addEventListener("change",    e => { row.user    = e.target.value; });
+    tr.querySelector(".bi-pass").addEventListener("change",    e => { row.pass    = e.target.value; });
+    tr.querySelector(".bi-from").addEventListener("change",    e => { row.from    = e.target.value; });
+    tr.querySelector(".bi-to").addEventListener("change",      e => { row.to      = e.target.value; });
+    tr.querySelector(".bi-subject").addEventListener("change", e => { row.subject = e.target.value; });
+  });
+}
+
+window.toggleBatchDetail = function(btn, id) {
+  const tr = btn.closest("tr");
+  const existing = tr.nextElementSibling;
+  if (existing && existing.classList.contains("batch-detail-row")) {
+    existing.remove();
+    btn.classList.remove("expanded");
+    return;
+  }
+  btn.classList.add("expanded");
+  const row = batchRows.find(r => r.id === id);
+  if (!row) return;
+  const detailTr = document.createElement("tr");
+  detailTr.className = "batch-detail-row";
+  const td = document.createElement("td");
+  td.colSpan = 12;
+  const logs = row.result?.logs || [];
+  let html = '<div class="log-container" style="max-height:160px;">';
+  if (logs.length > 0) {
+    for (const e of logs) {
+      const code = e.smtp_code ? `<span class="log-code">${e.smtp_code}</span>` : "";
+      html += `<div class="log-entry ${levelClass(e.level)}">
+        <span class="log-time">${e.timestamp}</span>
+        <span class="log-level">${levelLabel(e.level)}</span>
+        <span class="log-stage">${e.stage}</span>${code}
+        <span class="log-msg">${escapeHtml(e.message)}</span>
+      </div>`;
+    }
+  } else {
+    html += `<div class="text-dim" style="padding:8px;">${escapeHtml(row.result?.error || row.result?.message || "No logs.")}</div>`;
+  }
+  html += "</div>";
+  td.innerHTML = html;
+  detailTr.appendChild(td);
+  tr.after(detailTr);
+};
+
+function syncBatchRowsFromDom() {
+  $("#batch-tbody").querySelectorAll("tr[data-batch-id]").forEach(tr => {
+    const rowId = tr.dataset.batchId;
+    const row = batchRows.find(r => r.id === rowId);
+    if (!row) return;
+    row.host    = tr.querySelector(".bi-host")?.value    || "";
+    row.port    = parseInt(tr.querySelector(".bi-port")?.value) || 587;
+    row.enc     = tr.querySelector(".bi-enc")?.value     || "starttls";
+    row.user    = tr.querySelector(".bi-user")?.value    || "";
+    row.pass    = tr.querySelector(".bi-pass")?.value    || "";
+    row.from    = tr.querySelector(".bi-from")?.value    || "";
+    row.to      = tr.querySelector(".bi-to")?.value      || "";
+    row.subject = tr.querySelector(".bi-subject")?.value || "";
+  });
+}
+
+async function runBatch() {
+  if (batchRunning) return;
+  if (batchRows.length === 0) { showToast("Add at least one row.", "warning"); return; }
+
+  syncBatchRowsFromDom();
+
+  batchRows.forEach(r => { r.status = "idle"; r.result = null; });
+  renderBatchTable();
+  $("#batch-summary").style.display = "none";
+  batchRunning = true;
+
+  await runWithConcurrency(batchRows, 10, async (row) => {
+    row.status = "running";
+    updateBatchRowStatus(row);
+
+    if (!row.host || !row.from || !row.to) {
+      row.status = "skipped";
+      row.result = {
+        success: false, error: "Missing required fields (host, from, to)",
+        message: "Missing required fields (host, from, to)", logs: [], elapsed_ms: 0,
+      };
+      updateBatchRowStatus(row);
+      return;
+    }
+
+    const input = {
+      host: row.host, port: row.port, encryption: row.enc,
+      username: row.user, password: row.pass,
+      from: row.from, to: row.to, subject: row.subject,
+      body: "SMTP Lab batch test", html_body: null, timeout_secs: 30,
+    };
+
+    try {
+      const result = await invoke("smtp_test", { input });
+      row.status = result.success ? "success" : "failed";
+      row.result = result;
+    } catch (err) {
+      const msg = typeof err === "string" ? err : JSON.stringify(err);
+      row.status = "failed";
+      row.result = { success: false, message: msg, error: msg, logs: [], elapsed_ms: 0 };
+    }
+    updateBatchRowStatus(row);
+  });
+
+  batchRunning = false;
+  showBatchSummary();
+}
+
+function updateBatchRowStatus(row) {
+  const tr = $("#batch-tbody").querySelector(`tr[data-batch-id="${row.id}"]`);
+  if (!tr) return;
+  const statusCell  = tr.querySelector(".batch-status-cell");
+  const latencyCell = tr.querySelector(".batch-latency-cell");
+
+  if (statusCell) {
+    if (row.status === "idle")    statusCell.innerHTML = '<span class="batch-status-dot"></span>';
+    if (row.status === "running") statusCell.innerHTML = '<span class="batch-status-dot running"></span>';
+    if (row.status === "success") statusCell.innerHTML = '<span class="status-badge success" style="font-size:11px;">OK</span>';
+    if (row.status === "failed")  statusCell.innerHTML = `<span class="status-badge error" style="font-size:11px;" title="${escapeHtml(row.result?.error || row.result?.message || "")}">FAIL</span>`;
+    if (row.status === "skipped") statusCell.innerHTML = '<span class="status-badge" style="font-size:11px;background:var(--surface-3,#333);">SKIP</span>';
+  }
+  if (latencyCell) {
+    latencyCell.textContent = row.result?.elapsed_ms != null ? row.result.elapsed_ms + "ms" : "—";
+  }
+}
+
+function showBatchSummary() {
+  const total  = batchRows.length;
+  const passed = batchRows.filter(r => r.status === "success").length;
+  const failed = batchRows.filter(r => r.status === "failed" || r.status === "skipped").length;
+  const times  = batchRows.filter(r => r.result?.elapsed_ms).map(r => r.result.elapsed_ms);
+  const avg    = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null;
+  $("#bs-total").textContent  = total;
+  $("#bs-passed").textContent = passed;
+  $("#bs-failed").textContent = failed;
+  $("#bs-avg").textContent    = avg != null ? avg + "ms" : "—";
+  $("#batch-summary").style.display = "";
+}
+
+async function runWithConcurrency(items, limit, fn) {
+  const queue = [...items];
+  let active  = 0;
+  return new Promise((resolve) => {
+    function next() {
+      if (queue.length === 0 && active === 0) { resolve(); return; }
+      while (active < limit && queue.length > 0) {
+        const item = queue.shift();
+        active++;
+        fn(item).finally(() => { active--; next(); });
+      }
+    }
+    next();
+  });
+}
+
+function exportBatch(format) {
+  const ts = new Date().toISOString();
+  if (format === "csv") {
+    const header = "host,port,encryption,from,to,subject,status,latency_ms,timestamp";
+    const rows = batchRows.map(r => {
+      const status = r.status === "idle" ? "" :
+                     r.status === "running" ? "running" :
+                     r.status === "success" ? "success" :
+                     r.status === "skipped" ? "skipped" : "failed";
+      return [r.host, r.port, r.enc, r.from, r.to, r.subject,
+              status, r.result?.elapsed_ms ?? "", ts]
+        .map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
+    });
+    const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
+    downloadBlob(blob, `smtp-batch-${dateSlug()}.csv`);
+  } else {
+    const data = batchRows.map(r => ({
+      host: r.host, port: r.port, encryption: r.enc,
+      from: r.from, to: r.to, subject: r.subject,
+      success: r.result?.success ?? null, message: r.result?.message ?? null,
+      elapsed_ms: r.result?.elapsed_ms ?? null, logs: r.result?.logs ?? [],
+      exported_at: ts,
+    }));
+    downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+      `smtp-batch-${dateSlug()}.json`);
+  }
+  showToast(`Batch exported as ${format.toUpperCase()}.`, "success");
+}
+
+// ---------------------------------------------------------------------------
+// Monitor Page
+// ---------------------------------------------------------------------------
+function setupMonitorPage() {
+  $("#btn-monitor-add").addEventListener("click", () => {
+    $("#mon-name").value = "";
+    $("#mon-host").value = "";
+    $("#mon-port").value = "587";
+    $("#monitor-add-modal").style.display = "";
+  });
+  $("#btn-monitor-modal-close").addEventListener("click",  closeMonitorModal);
+  $("#btn-monitor-modal-cancel").addEventListener("click", closeMonitorModal);
+  $("#btn-monitor-modal-save").addEventListener("click",   saveMonitorServer);
+  $("#btn-monitor-start-all").addEventListener("click",    monitorStartAll);
+  $("#btn-monitor-stop-all").addEventListener("click",     monitorStopAll);
+
+  loadMonitorServers();
+  relativeTimeTicker = setInterval(updateRelativeTimes, 1000);
+}
+
+function closeMonitorModal() {
+  $("#monitor-add-modal").style.display = "none";
+}
+
+function saveMonitorServer() {
+  const host = $("#mon-host").value.trim();
+  if (!host) { showToast("Host is required.", "warning"); return; }
+  const name       = $("#mon-name").value.trim() || host;
+  const port       = parseInt($("#mon-port").value) || 587;
+  const intervalMs = parseInt($("#monitor-interval").value) || 60000;
+  const saved = { id: crypto.randomUUID(), name, host, port, interval_ms: intervalMs };
+  monitorServers.push(createMonitorEntry(saved));
+  persistMonitorServers();
+  renderMonitorGrid();
+  closeMonitorModal();
+  showToast(`"${name}" added.`, "success");
+}
+
+function createMonitorEntry(saved) {
+  return {
+    ...saved,
+    timer: null, status: "idle",
+    lastMs: null, lastChecked: null,
+    checks: { ok: 0, total: 0 },
+    sparkData: [], sparkChart: null,
+    detailOpen: false, detailLog: [],
+  };
+}
+
+function loadMonitorServers() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("smtplab-monitor-servers") || "[]");
+    monitorServers = saved.map(createMonitorEntry);
+  } catch { monitorServers = []; }
+  renderMonitorGrid();
+}
+
+function persistMonitorServers() {
+  const toSave = monitorServers.map(({ id, name, host, port, interval_ms }) =>
+    ({ id, name, host, port, interval_ms }));
+  localStorage.setItem("smtplab-monitor-servers", JSON.stringify(toSave));
+}
+
+function renderMonitorGrid() {
+  const grid  = $("#monitor-grid");
+  const empty = $("#monitor-empty");
+
+  const currentIds = new Set(monitorServers.map(s => s.id));
+  grid.querySelectorAll(".monitor-card").forEach(c => {
+    if (!currentIds.has(c.dataset.serverId)) c.remove();
+  });
+
+  if (monitorServers.length === 0) {
+    empty.style.display = "";
+    return;
+  }
+  empty.style.display = "none";
+
+  const existingIds = new Set([...grid.querySelectorAll(".monitor-card")]
+    .map(c => c.dataset.serverId));
+
+  for (const srv of monitorServers) {
+    if (!existingIds.has(srv.id)) {
+      grid.appendChild(buildMonitorCard(srv));
+    }
+    updateMonitorCard(srv);
+  }
+}
+
+function buildMonitorCard(srv) {
+  const card = document.createElement("div");
+  card.className = "monitor-card";
+  card.dataset.serverId = srv.id;
+  card.innerHTML = `
+    <div class="monitor-card-header" onclick="toggleMonitorDetail('${srv.id}')">
+      <div>
+        <div class="monitor-card-name">${escapeHtml(srv.name)}</div>
+        <div class="monitor-card-host">${escapeHtml(srv.host)}:${srv.port}</div>
+      </div>
+      <span class="monitor-badge idle" data-badge>IDLE</span>
+    </div>
+    <div class="monitor-card-stats">
+      <span data-last-ms>&#8212; ms</span>
+      <span data-uptime>Uptime: &#8212;</span>
+    </div>
+    <div class="monitor-sparkline-wrap" data-sparkwrap>
+      ${window.Chart
+        ? `<canvas width="120" height="40" data-spark></canvas>`
+        : `<span class="chart-unavailable">(chart unavailable)</span>`}
+    </div>
+    <div class="monitor-card-footer">
+      <span class="monitor-last-checked" data-last-checked>Never checked</span>
+      <div class="monitor-card-controls" onclick="event.stopPropagation()">
+        <button class="btn btn-secondary btn-sm" style="padding:3px 10px;font-size:11px;"
+          data-toggle-btn onclick="toggleMonitorServer('${srv.id}')">Start</button>
+        <button class="btn-icon" title="Delete" onclick="deleteMonitorServer('${srv.id}')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="monitor-detail-panel" style="display:none;" data-detail
+         onclick="event.stopPropagation()"></div>
+  `;
+
+  if (window.Chart) {
+    const canvas = card.querySelector("[data-spark]");
+    srv.sparkChart = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: Array(20).fill(""),
+        datasets: [{
+          data: [], borderColor: "#6366f1", borderWidth: 1.5,
+          tension: 0.4, fill: false, pointRadius: 0,
+        }],
+      },
+      options: {
+        responsive: false, animation: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { display: false }, y: { display: false } },
+      },
+    });
+  }
+  return card;
+}
+
+function updateMonitorCard(srv) {
+  const card = $("#monitor-grid").querySelector(`[data-server-id="${srv.id}"]`);
+  if (!card) return;
+
+  const badge = card.querySelector("[data-badge]");
+  if (badge) {
+    badge.className = `monitor-badge ${srv.status}`;
+    badge.textContent = ({ idle:"IDLE", checking:"CHECKING", reachable:"REACHABLE", down:"DOWN", slow:"SLOW" })[srv.status] || srv.status.toUpperCase();
+  }
+  const lastMsEl = card.querySelector("[data-last-ms]");
+  if (lastMsEl) lastMsEl.textContent = srv.lastMs != null ? srv.lastMs + " ms" : "— ms";
+
+  const uptimeEl = card.querySelector("[data-uptime]");
+  if (uptimeEl) {
+    const pct = srv.checks.total > 0
+      ? (srv.checks.ok / srv.checks.total * 100).toFixed(1) : null;
+    uptimeEl.textContent = pct != null ? `Uptime: ${pct}%` : "Uptime: —";
+  }
+
+  const toggleBtn = card.querySelector("[data-toggle-btn]");
+  if (toggleBtn) toggleBtn.textContent = srv.timer ? "Stop" : "Start";
+
+  if (srv.sparkChart && srv.sparkData.length > 0) {
+    srv.sparkChart.data.datasets[0].data = [...srv.sparkData];
+    srv.sparkChart.update("none");
+  }
+}
+
+window.toggleMonitorDetail = function(id) {
+  const srv = monitorServers.find(s => s.id === id);
+  if (!srv) return;
+  const card = $("#monitor-grid").querySelector(`[data-server-id="${id}"]`);
+  if (!card) return;
+  const panel = card.querySelector("[data-detail]");
+  if (!panel) return;
+  srv.detailOpen = !srv.detailOpen;
+  panel.style.display = srv.detailOpen ? "" : "none";
+  if (srv.detailOpen) renderMonitorDetail(srv, panel);
+};
+
+function renderMonitorDetail(srv, panel) {
+  if (srv.detailLog.length === 0) {
+    panel.innerHTML = '<div class="text-dim" style="padding:6px 0;font-size:12px;">No checks yet.</div>';
+    return;
+  }
+  panel.innerHTML = [...srv.detailLog].slice(-50).reverse().map(e => `
+    <div class="monitor-detail-row">
+      <span class="mdr-time">${e.ts}</span>
+      <span class="mdr-ms">${e.ms != null ? e.ms + "ms" : "—"}</span>
+      <span class="mdr-status ${e.status}">${e.status.toUpperCase()}</span>
+      ${e.error ? `<span class="text-dim" style="font-size:11px;">${escapeHtml(e.error)}</span>` : ""}
+    </div>`).join("");
+}
+
+window.toggleMonitorServer = function(id) {
+  const srv = monitorServers.find(s => s.id === id);
+  if (!srv) return;
+  srv.timer ? stopMonitorServer(srv) : startMonitorServer(srv);
+};
+
+window.deleteMonitorServer = function(id) {
+  const srv = monitorServers.find(s => s.id === id);
+  if (srv?.timer) stopMonitorServer(srv);
+  if (srv?.sparkChart) srv.sparkChart.destroy();
+  monitorServers = monitorServers.filter(s => s.id !== id);
+  persistMonitorServers();
+  renderMonitorGrid();
+};
+
+function startMonitorServer(srv) {
+  if (srv.timer) return;
+  pingServer(srv);
+  srv.timer = setInterval(() => pingServer(srv), srv.interval_ms);
+  updateMonitorCard(srv);
+}
+
+function stopMonitorServer(srv) {
+  if (srv.timer) { clearInterval(srv.timer); srv.timer = null; }
+  updateMonitorCard(srv);
+}
+
+async function pingServer(srv) {
+  const prevStatus = srv.status === "checking"
+    ? (srv.lastMs != null ? (srv.lastMs >= 2000 ? "slow" : "reachable") : "idle")
+    : srv.status;
+  srv.status = "checking";
+  updateMonitorCard(srv);
+
+  let newStatus, ms, errorMsg;
+  try {
+    const result = await invoke("smtp_ping", { host: srv.host, port: srv.port });
+    ms = result.latency_ms;
+    if (!result.reachable) {
+      newStatus = "down";
+      errorMsg  = result.error || "Unreachable";
+    } else {
+      newStatus = ms >= 2000 ? "slow" : "reachable";
+    }
+  } catch (err) {
+    newStatus = "down";
+    ms        = null;
+    errorMsg  = typeof err === "string" ? err : JSON.stringify(err);
+  }
+
+  srv.lastMs      = ms;
+  srv.lastChecked = Date.now();
+  srv.checks.total++;
+  if (newStatus === "reachable" || newStatus === "slow") srv.checks.ok++;
+  if (ms != null) { srv.sparkData.push(ms); if (srv.sparkData.length > 20) srv.sparkData.shift(); }
+  srv.detailLog.push({ ts: new Date().toLocaleTimeString(), ms, status: newStatus, error: errorMsg });
+  if (srv.detailLog.length > 200) srv.detailLog.shift();
+
+  srv.status = newStatus;
+
+  if (prevStatus !== "idle" && prevStatus !== "checking" && prevStatus !== newStatus) {
+    fireMonitorNotification(srv, newStatus);
+  }
+
+  updateMonitorCard(srv);
+  if (srv.detailOpen) {
+    const card = $("#monitor-grid").querySelector(`[data-server-id="${srv.id}"]`);
+    if (card) renderMonitorDetail(srv, card.querySelector("[data-detail]"));
+  }
+}
+
+function fireMonitorNotification(srv, newStatus) {
+  if (notificationsDenied || !window.Notification) return;
+  if (Notification.permission !== "granted") return;
+  const msgs = { down: "is DOWN", reachable: "is back REACHABLE", slow: "is SLOW (high latency)" };
+  if (!msgs[newStatus]) return;
+  new Notification("SMTP Lab Monitor", {
+    body: `${srv.name} (${srv.host}:${srv.port}) ${msgs[newStatus]}`,
+  });
+}
+
+async function monitorStartAll() {
+  if (window.Notification && Notification.permission === "default" && !notificationsDenied) {
+    const perm = await Notification.requestPermission();
+    if (perm === "denied") {
+      notificationsDenied = true;
+      showToast("Notifications blocked. Enable in System Preferences for server alerts.", "info");
+    }
+  }
+  monitorServers.forEach(startMonitorServer);
+}
+
+function monitorStopAll() {
+  monitorServers.forEach(stopMonitorServer);
+}
+
+function updateRelativeTimes() {
+  monitorServers.forEach(srv => {
+    const card = $("#monitor-grid").querySelector(`[data-server-id="${srv.id}"]`);
+    if (!card) return;
+    const el = card.querySelector("[data-last-checked]");
+    if (!el) return;
+    if (!srv.lastChecked) { el.textContent = "Never checked"; return; }
+    const secs = Math.round((Date.now() - srv.lastChecked) / 1000);
+    el.textContent = secs < 60 ? `${secs}s ago` : `${Math.round(secs / 60)}m ago`;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // DNS Tools Page

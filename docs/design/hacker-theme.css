@@ -1,0 +1,447 @@
+/**
+ * SMTP Lab - Matrix Hacker Theme
+ * 
+ * A cyberpunk-inspired green-on-dark theme for SMTP Lab
+ * 
+ * HOW TO USE:
+ * 1. Copy this file to desktop-app/src/hacker-theme.css
+ * 2. In index.html, add: <link rel="stylesheet" href="hacker-theme.css" />
+ *    AFTER the main styles.css link
+ * 3. The hacker theme will be applied automatically
+ */
+
+/* =================================================================
+   HACKER THEME - CSS VARIABLE OVERRIDES
+   ================================================================= */
+
+:root,
+[data-theme="dark"],
+[data-theme="hacker"] {
+  /* ---------------------------------------------------------------
+     BACKGROUNDS - True blacks with subtle green tint
+     --------------------------------------------------------------- */
+  --bg:             #0A0F0A;
+  --bg-elevated:    #0D120D;
+  --surface:        #111611;
+  --surface-2:      #151A15;
+  --surface-3:      #1A201A;
+  
+  /* ---------------------------------------------------------------
+     BORDERS - Green-tinted dark borders
+     --------------------------------------------------------------- */
+  --border:         #1E2A1E;
+  --border-light:   #2A3D2A;
+  
+  /* ---------------------------------------------------------------
+     TEXT - Green-tinted whites for terminal look
+     --------------------------------------------------------------- */
+  --text:           #D0F0D0;
+  --text-secondary: #A8C8A8;
+  --text-dim:       #507050;
+  
+  /* ---------------------------------------------------------------
+     ACCENT - Matrix Green spectrum
+     --------------------------------------------------------------- */
+  --accent:         #00FF41;
+  --accent-hover:   #39FF14;
+  --accent-dim:     rgba(0, 255, 65, 0.10);
+  --accent-text:    #00FF41;
+  
+  /* ---------------------------------------------------------------
+     SEMANTIC COLORS - Hacker-appropriate status colors
+     --------------------------------------------------------------- */
+  --success:        #00FF41;
+  --success-dim:    rgba(0, 255, 65, 0.12);
+  --warning:        #FFD700;
+  --warning-dim:    rgba(255, 215, 0, 0.12);
+  --error:          #FF3333;
+  --error-dim:      rgba(255, 51, 51, 0.12);
+  --info:           #00BFFF;
+  --info-dim:       rgba(0, 191, 255, 0.12);
+  
+  /* ---------------------------------------------------------------
+     SHADOWS - Green-tinted glows
+     --------------------------------------------------------------- */
+  --shadow:         0 2px 8px rgba(0, 0, 0, 0.6);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.7);
+  --glow:           0 0 10px rgba(0, 255, 65, 0.3);
+  --glow-intense:   0 0 20px rgba(0, 255, 65, 0.5);
+}
+
+/* =================================================================
+   ENHANCED COMPONENT STYLES
+   ================================================================= */
+
+/* ---------------------------------------------------------------
+   SIDEBAR - Dark with green accents
+   --------------------------------------------------------------- */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-logo {
+  color: var(--accent);
+}
+
+.logo-text {
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.logo-icon {
+  filter: drop-shadow(0 0 4px rgba(0, 255, 65, 0.5));
+}
+
+/* Nav item glow effect on active */
+.nav-item.active {
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 15px rgba(0, 255, 65, 0.08);
+}
+
+.nav-item.active::before {
+  box-shadow: 0 0 8px var(--accent);
+}
+
+/* Profile dot glow when active */
+.profile-item.active .profile-dot {
+  box-shadow: 0 0 6px var(--accent);
+}
+
+/* ---------------------------------------------------------------
+   FORM INPUTS - Terminal style with green focus
+   --------------------------------------------------------------- */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: "JetBrains Mono", "Fira Code", "SF Mono", monospace;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim), 0 0 15px rgba(0, 255, 65, 0.15);
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-dim);
+}
+
+/* Select dropdown arrow - green */
+select {
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%2300FF41' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* ---------------------------------------------------------------
+   BUTTONS - Glowing green primary
+   --------------------------------------------------------------- */
+.btn-primary {
+  background: linear-gradient(135deg, #0A3D1A 0%, #0D4A1E 100%);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.5);
+  font-weight: 700;
+}
+
+.btn-primary:hover {
+  background: var(--accent);
+  color: #000;
+  box-shadow: var(--glow-intense), 0 4px 20px rgba(0, 255, 65, 0.3);
+  text-shadow: none;
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+  box-shadow: var(--glow);
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-3);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-icon:hover {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+/* Loading spinner - green */
+.btn.loading::after {
+  border-color: rgba(0, 255, 65, 0.3);
+  border-top-color: var(--accent);
+}
+
+/* ---------------------------------------------------------------
+   LOG VIEWER - Matrix terminal aesthetic
+   --------------------------------------------------------------- */
+.log-container {
+  background: #050805;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  position: relative;
+}
+
+/* Scanlines effect - uncomment to enable */
+/*
+.log-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 65, 0.015) 2px,
+    rgba(0, 255, 65, 0.015) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+*/
+
+.log-toolbar {
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.log-title {
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
+  font-family: "JetBrains Mono", monospace;
+  letter-spacing: 0.1em;
+}
+
+.log-entry {
+  border-left: 2px solid transparent;
+  padding-left: 8px;
+  margin-left: -8px;
+}
+
+.log-entry:hover {
+  background: rgba(0, 255, 65, 0.03);
+  border-left-color: rgba(0, 255, 65, 0.3);
+}
+
+.log-stage {
+  color: var(--accent);
+  text-shadow: 0 0 4px rgba(0, 255, 65, 0.3);
+}
+
+/* Log level colors with glow */
+.log-success .log-level {
+  color: var(--success);
+  text-shadow: 0 0 6px rgba(0, 255, 65, 0.5);
+}
+
+.log-success .log-msg {
+  color: var(--success);
+}
+
+.log-error .log-level,
+.log-error .log-msg {
+  text-shadow: 0 0 6px rgba(255, 51, 51, 0.5);
+}
+
+.log-warning .log-level,
+.log-warning .log-msg {
+  text-shadow: 0 0 6px rgba(255, 215, 0, 0.4);
+}
+
+/* ---------------------------------------------------------------
+   STATUS INDICATORS - Glowing dots
+   --------------------------------------------------------------- */
+.status-indicator.success {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success), 0 0 16px rgba(0, 255, 65, 0.3);
+}
+
+.status-indicator.running {
+  background: var(--warning);
+  box-shadow: 0 0 8px var(--warning);
+}
+
+.status-indicator.error {
+  background: var(--error);
+  box-shadow: 0 0 8px var(--error);
+}
+
+/* ---------------------------------------------------------------
+   CARDS
+   --------------------------------------------------------------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.card:hover {
+  border-color: rgba(0, 255, 65, 0.2);
+}
+
+/* ---------------------------------------------------------------
+   TABS - Green underline
+   --------------------------------------------------------------- */
+.tab.active {
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
+}
+
+.tab.active::after {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+/* ---------------------------------------------------------------
+   TABLES
+   --------------------------------------------------------------- */
+.history-table th {
+  background: var(--bg-elevated);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+}
+
+.history-table tr:hover td {
+  background: rgba(0, 255, 65, 0.03);
+}
+
+.status-badge.success {
+  background: var(--success-dim);
+  color: var(--success);
+  border-left: 3px solid var(--success);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.2);
+}
+
+/* ---------------------------------------------------------------
+   TOGGLE & SLIDER
+   --------------------------------------------------------------- */
+.toggle-label input[type="checkbox"]:checked {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.5);
+}
+
+/* ---------------------------------------------------------------
+   SEARCH BOX
+   --------------------------------------------------------------- */
+.search-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim), 0 0 15px rgba(0, 255, 65, 0.1);
+}
+
+.search-box:focus-within svg {
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------
+   TOAST NOTIFICATIONS
+   --------------------------------------------------------------- */
+.toast {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+.toast-success {
+  border-left: 4px solid var(--success);
+  box-shadow: var(--shadow-lg), 0 0 20px rgba(0, 255, 65, 0.15);
+}
+
+/* ---------------------------------------------------------------
+   SCROLLBAR
+   --------------------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
+}
+
+/* ---------------------------------------------------------------
+   SELECTION
+   --------------------------------------------------------------- */
+::selection {
+  background: rgba(0, 255, 65, 0.25);
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------
+   ANIMATIONS
+   --------------------------------------------------------------- */
+@keyframes matrix-glow {
+  0%, 100% { text-shadow: 0 0 4px rgba(0, 255, 65, 0.5); }
+  50% { text-shadow: 0 0 8px rgba(0, 255, 65, 0.8), 0 0 16px rgba(0, 255, 65, 0.4); }
+}
+
+.sidebar-logo {
+  animation: matrix-glow 3s ease-in-out infinite;
+}
+
+@keyframes logSlideHacker {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+    text-shadow: 0 0 10px rgba(0, 255, 65, 0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    text-shadow: none;
+  }
+}
+
+.log-entry {
+  animation: logSlideHacker 0.2s ease;
+}
+
+@keyframes pulseHacker {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 4px var(--warning);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 12px var(--warning);
+  }
+}
+
+.status-indicator.running {
+  animation: pulseHacker 1.2s ease infinite;
+}
+
+/* =================================================================
+   END OF HACKER THEME
+   ================================================================= */
