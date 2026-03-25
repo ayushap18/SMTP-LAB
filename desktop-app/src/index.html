@@ -210,22 +210,27 @@
             </div>
           </div>
 
+          <div id="batch-progress" class="batch-progress" style="display:none;">
+            <div id="bp-fill" class="batch-progress-fill"></div>
+            <span id="bp-text" class="batch-progress-text">0/0 done</span>
+          </div>
+
           <div class="batch-table-wrap">
-            <table class="data-table batch-table" id="batch-table" style="display:none;">
+            <table class="batch-table" id="batch-table" style="display:none;">
               <thead>
                 <tr>
-                  <th style="width:36px">#</th>
-                  <th>Host</th>
-                  <th style="width:70px">Port</th>
-                  <th style="width:100px">Enc</th>
-                  <th>Username</th>
-                  <th>Password</th>
-                  <th>From</th>
-                  <th>To</th>
-                  <th>Subject</th>
-                  <th style="width:80px">Status</th>
-                  <th style="width:70px">Latency</th>
-                  <th style="width:36px"></th>
+                  <th class="col-num">#</th>
+                  <th class="col-host">Host</th>
+                  <th class="col-port">Port</th>
+                  <th class="col-enc">Encryption</th>
+                  <th class="col-cred">Username</th>
+                  <th class="col-cred">Password</th>
+                  <th class="col-email">From</th>
+                  <th class="col-email">To</th>
+                  <th class="col-subj">Subject</th>
+                  <th class="col-status">Status</th>
+                  <th class="col-lat">Latency</th>
+                  <th class="col-action"></th>
                 </tr>
               </thead>
               <tbody id="batch-tbody"></tbody>

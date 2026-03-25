@@ -342,9 +342,18 @@ async function runTest() {
   setLoading(true);
   const startTime = Date.now();
 
+  // Subscribe to real-time log events from Rust (no job_id = single test page).
+  let unlisten = null;
+  try {
+    unlisten = await window.__TAURI__.event.listen("smtp-log", (event) => {
+      if (event.payload.job_id == null) addLogEntry(event.payload.entry);
+    });
+  } catch { /* fallback: logs rendered from result below */ }
+
   try {
     const result = await invoke("smtp_test", { input });
-    for (const entry of result.logs) addLogEntry(entry);
+    // Streaming already rendered entries; if listen failed, render all at once.
+    if (!unlisten) for (const entry of result.logs) addLogEntry(entry);
 
     if (result.success) {
       setStatus("success", "Success", `${result.elapsed_ms}ms`);
@@ -358,6 +367,7 @@ async function runTest() {
     setStatus("error", "Error", `${Date.now() - startTime}ms`);
     showToast(friendlyError(err), "error");
   } finally {
+    if (unlisten) unlisten();
     setLoading(false);
     await loadHistory();
   }
@@ -706,7 +716,7 @@ function addBatchRow() {
     id, host: "", port: 587, enc: "starttls",
     user: "", pass: "", from: "", to: "",
     subject: "SMTP Lab Batch Test",
-    status: "idle", result: null,
+    status: "idle", result: null, liveLog: [], drawerOpen: false,
   });
   renderBatchTable();
 }
@@ -718,14 +728,25 @@ function clearBatch() {
   $("#batch-summary").style.display = "none";
 }
 
+function batchStatusHtml(row) {
+  switch (row.status) {
+    case "idle":    return `<span class="batch-pill idle">IDLE</span>`;
+    case "running": return `<span class="batch-pill running"><span class="batch-spinner"></span>RUNNING</span>`;
+    case "success": return `<span class="batch-pill success">✓ OK</span>`;
+    case "failed":  return `<span class="batch-pill failed" title="${escapeHtml(row.result?.message || "")}">✗ FAIL</span>`;
+    case "skipped": return `<span class="batch-pill skipped">SKIP</span>`;
+    default:        return "";
+  }
+}
+
 function renderBatchTable() {
-  const tbody  = $("#batch-tbody");
-  const empty  = $("#batch-empty");
-  const table  = $("#batch-table");
+  const tbody = $("#batch-tbody");
+  const empty = $("#batch-empty");
+  const table = $("#batch-table");
   if (batchRows.length === 0) {
     tbody.innerHTML = "";
-    empty.style.display  = "";
-    table.style.display  = "none";
+    empty.style.display = "";
+    table.style.display = "none";
     return;
   }
   empty.style.display = "none";
@@ -733,36 +754,40 @@ function renderBatchTable() {
 
   tbody.innerHTML = batchRows.map((r, i) => `
     <tr data-batch-id="${r.id}">
-      <td style="color:var(--text-dim);font-size:12px;text-align:center;">${i + 1}</td>
+      <td class="batch-num-cell">
+        <span class="batch-row-num">${i + 1}</span>
+        <button class="batch-row-delete" title="Delete row" onclick="deleteBatchRow('${r.id}')">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </td>
       <td><input type="text"     class="bi-host"    value="${escapeHtml(r.host)}"    placeholder="smtp.example.com" /></td>
-      <td><input type="number"   class="bi-port"    value="${r.port}" /></td>
+      <td><input type="number"   class="bi-port"    value="${r.port}"                style="width:60px" /></td>
       <td>
         <select class="bi-enc">
-          <option value="starttls" ${r.enc === "starttls" ? "selected" : ""}>STARTTLS</option>
-          <option value="ssl"      ${r.enc === "ssl"      ? "selected" : ""}>SSL</option>
-          <option value="none"     ${r.enc === "none"     ? "selected" : ""}>None</option>
+          <option value="starttls" ${r.enc==="starttls"?"selected":""}>STARTTLS</option>
+          <option value="ssl"      ${r.enc==="ssl"     ?"selected":""}>SSL/TLS</option>
+          <option value="none"     ${r.enc==="none"    ?"selected":""}>None</option>
         </select>
       </td>
-      <td><input type="text"     class="bi-user"    value="${escapeHtml(r.user)}"    placeholder="user@example.com" /></td>
-      <td><input type="password" class="bi-pass"    value="${escapeHtml(r.pass)}"    placeholder="password" /></td>
+      <td><input type="text"     class="bi-user"    value="${escapeHtml(r.user)}"    placeholder="username" /></td>
+      <td><input type="password" class="bi-pass"    value="${escapeHtml(r.pass)}"    placeholder="••••••••" /></td>
       <td><input type="email"    class="bi-from"    value="${escapeHtml(r.from)}"    placeholder="from@example.com" /></td>
       <td><input type="email"    class="bi-to"      value="${escapeHtml(r.to)}"      placeholder="to@example.com" /></td>
       <td><input type="text"     class="bi-subject" value="${escapeHtml(r.subject)}" placeholder="Subject" /></td>
-      <td style="text-align:center;" class="batch-status-cell">
-        <span class="batch-status-dot"></span>
-      </td>
-      <td style="font-family:var(--font-mono);font-size:12px;text-align:right;" class="batch-latency-cell">—</td>
+      <td class="batch-status-cell">${batchStatusHtml(r)}</td>
+      <td class="batch-latency-cell">${r.result?.elapsed_ms != null ? r.result.elapsed_ms + "ms" : "—"}</td>
       <td>
-        <button class="expand-btn" onclick="toggleBatchDetail(this, '${r.id}')">
+        <button class="expand-btn${r.drawerOpen ? " expanded" : ""}"
+                onclick="toggleBatchDetail(this, '${r.id}')" title="View logs">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </td>
     </tr>
+    ${r.drawerOpen ? `<tr class="batch-detail-row" data-detail-for="${r.id}"><td colspan="12">${buildBatchDrawerHtml(r)}</td></tr>` : ""}
   `).join("");
 
-  tbody.querySelectorAll("tr[data-batch-id]").forEach((tr) => {
-    const rowId = tr.dataset.batchId;
-    const row = batchRows.find(r => r.id === rowId);
+  tbody.querySelectorAll("tr[data-batch-id]").forEach(tr => {
+    const row = batchRows.find(r => r.id === tr.dataset.batchId);
     if (!row) return;
     tr.querySelector(".bi-host").addEventListener("change",    e => { row.host    = e.target.value; });
     tr.querySelector(".bi-port").addEventListener("change",    e => { row.port    = parseInt(e.target.value) || 587; });
@@ -775,46 +800,45 @@ function renderBatchTable() {
   });
 }
 
-window.toggleBatchDetail = function(btn, id) {
-  const tr = btn.closest("tr");
-  const existing = tr.nextElementSibling;
-  if (existing && existing.classList.contains("batch-detail-row")) {
-    existing.remove();
-    btn.classList.remove("expanded");
-    return;
+function buildBatchDrawerHtml(row) {
+  const logs = row.liveLog?.length ? row.liveLog : (row.result?.logs || []);
+  if (logs.length === 0) {
+    const msg = row.result?.message || row.result?.error || (row.status === "idle" ? "Run the batch to see logs." : "No logs.");
+    return `<div class="batch-drawer"><div class="text-dim" style="padding:6px 0;font-size:12px;">${escapeHtml(msg)}</div></div>`;
   }
-  btn.classList.add("expanded");
+  const entries = logs.map(e => {
+    const code = e.smtp_code ? `<span class="log-code">${e.smtp_code}</span>` : "";
+    return `<div class="log-entry ${levelClass(e.level)}">
+      <span class="log-time">${e.timestamp}</span>
+      <span class="log-level">${levelLabel(e.level)}</span>
+      <span class="log-stage">${e.stage}</span>${code}
+      <span class="log-msg">${escapeHtml(e.message)}</span>
+    </div>`;
+  }).join("");
+  return `<div class="batch-drawer"><div class="log-container" style="max-height:180px;">${entries}</div></div>`;
+}
+
+window.deleteBatchRow = function(id) {
+  if (batchRunning) return;
+  batchRows = batchRows.filter(r => r.id !== id);
+  renderBatchTable();
+};
+
+window.toggleBatchDetail = function(btn, id) {
   const row = batchRows.find(r => r.id === id);
   if (!row) return;
-  const detailTr = document.createElement("tr");
-  detailTr.className = "batch-detail-row";
-  const td = document.createElement("td");
-  td.colSpan = 12;
-  const logs = row.result?.logs || [];
-  let html = '<div class="log-container" style="max-height:160px;">';
-  if (logs.length > 0) {
-    for (const e of logs) {
-      const code = e.smtp_code ? `<span class="log-code">${e.smtp_code}</span>` : "";
-      html += `<div class="log-entry ${levelClass(e.level)}">
-        <span class="log-time">${e.timestamp}</span>
-        <span class="log-level">${levelLabel(e.level)}</span>
-        <span class="log-stage">${e.stage}</span>${code}
-        <span class="log-msg">${escapeHtml(e.message)}</span>
-      </div>`;
-    }
-  } else {
-    html += `<div class="text-dim" style="padding:8px;">${escapeHtml(row.result?.error || row.result?.message || "No logs.")}</div>`;
+  row.drawerOpen = !row.drawerOpen;
+  renderBatchTable();
+  // Scroll the drawer into view
+  if (row.drawerOpen) {
+    const drawerTr = $("#batch-tbody").querySelector(`[data-detail-for="${id}"]`);
+    if (drawerTr) drawerTr.scrollIntoView({ block: "nearest" });
   }
-  html += "</div>";
-  td.innerHTML = html;
-  detailTr.appendChild(td);
-  tr.after(detailTr);
 };
 
 function syncBatchRowsFromDom() {
   $("#batch-tbody").querySelectorAll("tr[data-batch-id]").forEach(tr => {
-    const rowId = tr.dataset.batchId;
-    const row = batchRows.find(r => r.id === rowId);
+    const row = batchRows.find(r => r.id === tr.dataset.batchId);
     if (!row) return;
     row.host    = tr.querySelector(".bi-host")?.value    || "";
     row.port    = parseInt(tr.querySelector(".bi-port")?.value) || 587;
@@ -827,36 +851,91 @@ function syncBatchRowsFromDom() {
   });
 }
 
+function updateBatchRowStatus(row) {
+  const tr = $("#batch-tbody").querySelector(`tr[data-batch-id="${row.id}"]`);
+  if (!tr) return;
+  const statusCell  = tr.querySelector(".batch-status-cell");
+  const latencyCell = tr.querySelector(".batch-latency-cell");
+  if (statusCell)  statusCell.innerHTML = batchStatusHtml(row);
+  if (latencyCell) latencyCell.textContent = row.result?.elapsed_ms != null ? row.result.elapsed_ms + "ms" : "—";
+
+  // Refresh live drawer if open
+  const drawerTr = $("#batch-tbody").querySelector(`[data-detail-for="${row.id}"]`);
+  if (drawerTr) drawerTr.querySelector("td").innerHTML = buildBatchDrawerHtml(row);
+}
+
+function appendBatchRowLiveLog(row, entry) {
+  if (!row.liveLog) row.liveLog = [];
+  row.liveLog.push(entry);
+  const drawerTr = $("#batch-tbody").querySelector(`[data-detail-for="${row.id}"]`);
+  if (!drawerTr) return;
+  const logContainer = drawerTr.querySelector(".log-container");
+  if (!logContainer) {
+    drawerTr.querySelector("td").innerHTML = buildBatchDrawerHtml(row);
+    return;
+  }
+  const el = document.createElement("div");
+  el.className = `log-entry ${levelClass(entry.level)}`;
+  const code = entry.smtp_code ? `<span class="log-code">${entry.smtp_code}</span>` : "";
+  el.innerHTML = `<span class="log-time">${entry.timestamp}</span><span class="log-level">${levelLabel(entry.level)}</span><span class="log-stage">${entry.stage}</span>${code}<span class="log-msg">${escapeHtml(entry.message)}</span>`;
+  logContainer.appendChild(el);
+  logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+function updateBatchProgress() {
+  const done    = batchRows.filter(r => r.status !== "idle" && r.status !== "running").length;
+  const running = batchRows.filter(r => r.status === "running").length;
+  const total   = batchRows.length;
+  const bar     = $("#batch-progress");
+  if (!bar) return;
+  if (!batchRunning) { bar.style.display = "none"; return; }
+  bar.style.display = "";
+  $("#bp-text").textContent = `${done}/${total} done · ${running} running`;
+  $("#bp-fill").style.width = `${(done / total) * 100}%`;
+}
+
 async function runBatch() {
   if (batchRunning) return;
   if (batchRows.length === 0) { showToast("Add at least one row.", "warning"); return; }
 
   syncBatchRowsFromDom();
-
-  batchRows.forEach(r => { r.status = "idle"; r.result = null; });
+  batchRows.forEach(r => { r.status = "idle"; r.result = null; r.liveLog = []; r.drawerOpen = false; });
   renderBatchTable();
   $("#batch-summary").style.display = "none";
   batchRunning = true;
+  updateBatchProgress();
+
+  const progressTick = setInterval(updateBatchProgress, 300);
 
   await runWithConcurrency(batchRows, 10, async (row) => {
     row.status = "running";
-    updateBatchRowStatus(row);
+    row.liveLog = [];
+    if (row.drawerOpen) renderBatchTable();
+    else updateBatchRowStatus(row);
 
     if (!row.host || !row.from || !row.to) {
       row.status = "skipped";
-      row.result = {
-        success: false, error: "Missing required fields (host, from, to)",
-        message: "Missing required fields (host, from, to)", logs: [], elapsed_ms: 0,
-      };
+      row.result = { success: false, message: "Missing required fields (host, from, to)", logs: [], elapsed_ms: 0 };
       updateBatchRowStatus(row);
       return;
     }
+
+    // Subscribe to real-time log events for this specific job.
+    let unlisten = null;
+    try {
+      unlisten = await window.__TAURI__.event.listen("smtp-log", (event) => {
+        if (event.payload.job_id === row.id) {
+          appendBatchRowLiveLog(row, event.payload.entry);
+        }
+      });
+    } catch { /* streaming unavailable, logs render from result */ }
 
     const input = {
       host: row.host, port: row.port, encryption: row.enc,
       username: row.user, password: row.pass,
       from: row.from, to: row.to, subject: row.subject,
       body: "SMTP Lab batch test", html_body: null, timeout_secs: 30,
+      job_id: row.id,
     };
 
     try {
@@ -867,30 +946,16 @@ async function runBatch() {
       const msg = typeof err === "string" ? err : JSON.stringify(err);
       row.status = "failed";
       row.result = { success: false, message: msg, error: msg, logs: [], elapsed_ms: 0 };
+    } finally {
+      if (unlisten) unlisten();
     }
     updateBatchRowStatus(row);
   });
 
+  clearInterval(progressTick);
   batchRunning = false;
+  updateBatchProgress();
   showBatchSummary();
-}
-
-function updateBatchRowStatus(row) {
-  const tr = $("#batch-tbody").querySelector(`tr[data-batch-id="${row.id}"]`);
-  if (!tr) return;
-  const statusCell  = tr.querySelector(".batch-status-cell");
-  const latencyCell = tr.querySelector(".batch-latency-cell");
-
-  if (statusCell) {
-    if (row.status === "idle")    statusCell.innerHTML = '<span class="batch-status-dot"></span>';
-    if (row.status === "running") statusCell.innerHTML = '<span class="batch-status-dot running"></span>';
-    if (row.status === "success") statusCell.innerHTML = '<span class="status-badge success" style="font-size:11px;">OK</span>';
-    if (row.status === "failed")  statusCell.innerHTML = `<span class="status-badge error" style="font-size:11px;" title="${escapeHtml(row.result?.error || row.result?.message || "")}">FAIL</span>`;
-    if (row.status === "skipped") statusCell.innerHTML = '<span class="status-badge" style="font-size:11px;background:var(--surface-3,#333);">SKIP</span>';
-  }
-  if (latencyCell) {
-    latencyCell.textContent = row.result?.elapsed_ms != null ? row.result.elapsed_ms + "ms" : "—";
-  }
 }
 
 function showBatchSummary() {

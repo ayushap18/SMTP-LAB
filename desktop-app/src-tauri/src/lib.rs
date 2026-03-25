@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::io::{BufRead, BufReader, Write as IoWrite};
 use std::net::{Shutdown, TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
-use tauri::State;
+use tauri::{Emitter, State};
 use tokio::task::spawn_blocking;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
@@ -138,6 +138,16 @@ pub struct SmtpFormInput {
     pub html_body: Option<String>,
     #[serde(default)]
     pub timeout_secs: Option<u64>,
+    /// Optional job identifier for batch runs — used to route streamed log events.
+    #[serde(default)]
+    pub job_id: Option<String>,
+}
+
+/// Payload emitted on the "smtp-log" event for real-time log streaming.
+#[derive(Debug, Clone, Serialize)]
+pub struct LogEvent {
+    pub job_id: Option<String>,
+    pub entry: LogEntry,
 }
 
 /// Result sent back to the frontend.
@@ -176,6 +186,7 @@ fn parse_encryption(s: &str) -> Encryption {
 async fn smtp_test(
     input: SmtpFormInput,
     state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<SmtpTestOutput, String> {
     let encryption = parse_encryption(&input.encryption);
     let config = SmtpConfig {
@@ -199,6 +210,13 @@ async fn smtp_test(
         let mut state_logger = state.logger.lock().unwrap();
         *state_logger = logger.clone();
     }
+
+    // Stream each log entry to the frontend in real time.
+    let job_id = input.job_id.clone();
+    let handle = app_handle.clone();
+    logger.on_entry(move |entry| {
+        let _ = handle.emit("smtp-log", LogEvent { job_id: job_id.clone(), entry });
+    });
 
     let tester = SmtpTester::new(config, logger);
     let result = tester.run().await;
