@@ -980,8 +980,9 @@ function saveMonitorServer() {
   if (!host) { showToast("Host is required.", "warning"); return; }
   const name       = $("#mon-name").value.trim() || host;
   const port       = parseInt($("#mon-port").value) || 587;
-  const intervalMs = parseInt($("#monitor-interval").value) || 60000;
-  const saved = { id: crypto.randomUUID(), name, host, port, interval_ms: intervalMs };
+  const encryption = $("#mon-encryption").value || "starttls";
+  const intervalMs = parseInt($("#mon-interval-local").value) || 60000;
+  const saved = { id: crypto.randomUUID(), name, host, port, encryption, interval_ms: intervalMs };
   monitorServers.push(createMonitorEntry(saved));
   persistMonitorServers();
   renderMonitorGrid();
@@ -1009,8 +1010,8 @@ function loadMonitorServers() {
 }
 
 function persistMonitorServers() {
-  const toSave = monitorServers.map(({ id, name, host, port, interval_ms }) =>
-    ({ id, name, host, port, interval_ms }));
+  const toSave = monitorServers.map(({ id, name, host, port, encryption, interval_ms }) =>
+    ({ id, name, host, port, encryption: encryption || "starttls", interval_ms }));
   localStorage.setItem("smtplab-monitor-servers", JSON.stringify(toSave));
 }
 
@@ -1044,29 +1045,56 @@ function buildMonitorCard(srv) {
   const card = document.createElement("div");
   card.className = "monitor-card";
   card.dataset.serverId = srv.id;
+  const encLabel = { starttls: "STARTTLS", ssl: "SSL/TLS", none: "Plain" }[srv.encryption || "starttls"] || "STARTTLS";
+  const encClass = { starttls: "enc-starttls", ssl: "enc-ssl", none: "enc-none" }[srv.encryption || "starttls"] || "enc-starttls";
+  const intervalLabel = srv.interval_ms >= 60000 ? `${srv.interval_ms/60000}m` : `${srv.interval_ms/1000}s`;
+
   card.innerHTML = `
-    <div class="monitor-card-header" onclick="toggleMonitorDetail('${srv.id}')">
-      <div>
-        <div class="monitor-card-name">${escapeHtml(srv.name)}</div>
-        <div class="monitor-card-host">${escapeHtml(srv.host)}:${srv.port}</div>
+    <div class="monitor-card-header">
+      <div class="monitor-card-title-row" onclick="toggleMonitorDetail('${srv.id}')">
+        <div class="monitor-card-name-wrap">
+          <div class="monitor-card-name">${escapeHtml(srv.name)}</div>
+          <div class="monitor-card-meta">
+            <span class="monitor-card-host">${escapeHtml(srv.host)}:${srv.port}</span>
+            <span class="enc-pill ${encClass}">${encLabel}</span>
+            <span class="interval-pill">every ${intervalLabel}</span>
+          </div>
+        </div>
+        <span class="monitor-badge idle" data-badge>IDLE</span>
       </div>
-      <span class="monitor-badge idle" data-badge>IDLE</span>
     </div>
-    <div class="monitor-card-stats">
-      <span data-last-ms>&#8212; ms</span>
-      <span data-uptime>Uptime: &#8212;</span>
+
+    <div class="monitor-card-body" onclick="toggleMonitorDetail('${srv.id}')">
+      <div class="monitor-metrics-row">
+        <div class="monitor-metric">
+          <span class="monitor-metric-label">Latency</span>
+          <span class="monitor-metric-value" data-last-ms>&#8212;</span>
+        </div>
+        <div class="monitor-metric">
+          <span class="monitor-metric-label">Uptime</span>
+          <span class="monitor-metric-value" data-uptime>&#8212;</span>
+        </div>
+        <div class="monitor-metric">
+          <span class="monitor-metric-label">Checks</span>
+          <span class="monitor-metric-value" data-checks>0</span>
+        </div>
+      </div>
+      <div class="monitor-sparkline-wrap" data-sparkwrap>
+        ${window.Chart
+          ? `<canvas data-spark style="display:block;"></canvas>`
+          : `<span class="chart-unavailable">(chart unavailable)</span>`}
+      </div>
     </div>
-    <div class="monitor-sparkline-wrap" data-sparkwrap>
-      ${window.Chart
-        ? `<canvas width="120" height="40" data-spark></canvas>`
-        : `<span class="chart-unavailable">(chart unavailable)</span>`}
-    </div>
+
     <div class="monitor-card-footer">
       <span class="monitor-last-checked" data-last-checked>Never checked</span>
       <div class="monitor-card-controls" onclick="event.stopPropagation()">
-        <button class="btn btn-secondary btn-sm" style="padding:3px 10px;font-size:11px;"
-          data-toggle-btn onclick="toggleMonitorServer('${srv.id}')">Start</button>
-        <button class="btn-icon" title="Delete" onclick="deleteMonitorServer('${srv.id}')">
+        <button class="btn btn-primary btn-sm monitor-toggle-btn"
+          data-toggle-btn onclick="toggleMonitorServer('${srv.id}')">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Start
+        </button>
+        <button class="btn-icon" title="Delete server" onclick="deleteMonitorServer('${srv.id}')">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"/>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -1080,19 +1108,29 @@ function buildMonitorCard(srv) {
 
   if (window.Chart) {
     const canvas = card.querySelector("[data-spark]");
+    canvas.width  = 280;
+    canvas.height = 48;
     srv.sparkChart = new Chart(canvas, {
       type: "line",
       data: {
         labels: Array(20).fill(""),
         datasets: [{
-          data: [], borderColor: "#6366f1", borderWidth: 1.5,
-          tension: 0.4, fill: false, pointRadius: 0,
+          data: [],
+          borderColor: "#6366f1",
+          backgroundColor: "rgba(99,102,241,0.08)",
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true,
+          pointRadius: 0,
+          pointHoverRadius: 3,
         }],
       },
       options: {
-        responsive: false, animation: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { display: false }, y: { display: false } },
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
       },
     });
   }
@@ -1106,20 +1144,31 @@ function updateMonitorCard(srv) {
   const badge = card.querySelector("[data-badge]");
   if (badge) {
     badge.className = `monitor-badge ${srv.status}`;
-    badge.textContent = ({ idle:"IDLE", checking:"CHECKING", reachable:"REACHABLE", down:"DOWN", slow:"SLOW" })[srv.status] || srv.status.toUpperCase();
+    badge.textContent = ({ idle:"IDLE", checking:"···", reachable:"REACHABLE", down:"DOWN", slow:"SLOW" })[srv.status] || srv.status.toUpperCase();
   }
   const lastMsEl = card.querySelector("[data-last-ms]");
-  if (lastMsEl) lastMsEl.textContent = srv.lastMs != null ? srv.lastMs + " ms" : "— ms";
+  if (lastMsEl) lastMsEl.textContent = srv.lastMs != null ? srv.lastMs + " ms" : "—";
 
   const uptimeEl = card.querySelector("[data-uptime]");
   if (uptimeEl) {
     const pct = srv.checks.total > 0
       ? (srv.checks.ok / srv.checks.total * 100).toFixed(1) : null;
-    uptimeEl.textContent = pct != null ? `Uptime: ${pct}%` : "Uptime: —";
+    uptimeEl.textContent = pct != null ? `${pct}%` : "—";
   }
 
+  const checksEl = card.querySelector("[data-checks]");
+  if (checksEl) checksEl.textContent = srv.checks.total || 0;
+
   const toggleBtn = card.querySelector("[data-toggle-btn]");
-  if (toggleBtn) toggleBtn.textContent = srv.timer ? "Stop" : "Start";
+  if (toggleBtn) {
+    if (srv.timer) {
+      toggleBtn.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Stop`;
+      toggleBtn.className = "btn btn-secondary btn-sm monitor-toggle-btn";
+    } else {
+      toggleBtn.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start`;
+      toggleBtn.className = "btn btn-primary btn-sm monitor-toggle-btn";
+    }
+  }
 
   if (srv.sparkChart && srv.sparkData.length > 0) {
     srv.sparkChart.data.datasets[0].data = [...srv.sparkData];

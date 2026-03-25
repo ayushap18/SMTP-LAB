@@ -296,6 +296,25 @@
                   <input type="number" id="mon-port" value="587" />
                 </div>
               </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="mon-encryption">Encryption</label>
+                  <select id="mon-encryption">
+                    <option value="starttls" selected>STARTTLS</option>
+                    <option value="ssl">SSL/TLS</option>
+                    <option value="none">None</option>
+                  </select>
+                </div>
+                <div class="form-group flex-1">
+                  <label for="mon-interval-local">Check Interval</label>
+                  <select id="mon-interval-local">
+                    <option value="30000">30 seconds</option>
+                    <option value="60000" selected>1 minute</option>
+                    <option value="300000">5 minutes</option>
+                    <option value="600000">10 minutes</option>
+                  </select>
+                </div>
+              </div>
               <div class="form-actions">
                 <button id="btn-monitor-modal-save" class="btn btn-primary">Add Server</button>
                 <button id="btn-monitor-modal-cancel" class="btn btn-secondary">Cancel</button>

@@ -38,6 +38,8 @@
   --radius-lg:    12px;
   --sidebar-w:    240px;
   --transition:   0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --input-bg:     #1a1d28;
+  --surface-hover: rgba(255,255,255,0.04);
 }
 
 [data-theme="light"] {
@@ -65,6 +67,8 @@
   --info-dim:     rgba(59,130,246,0.08);
   --shadow:       0 2px 8px rgba(0,0,0,0.06);
   --shadow-lg:    0 8px 32px rgba(0,0,0,0.1);
+  --input-bg:     #f8f9fc;
+  --surface-hover: rgba(0,0,0,0.03);
 }
 
 /* ---------------------------------------------------------------
@@ -1593,7 +1597,121 @@ input[type="range"]::-webkit-slider-thumb {
   display: flex; align-items: center; justify-content: center; z-index: 200;
 }
 .modal-card {
-  background: var(--surface-1); border: 1px solid var(--border);
+  background: var(--surface); border: 1px solid var(--border);
   border-radius: 12px; padding: 20px;
   min-width: 340px; max-width: 480px; width: 90%;
+}
+
+/* ================================================================
+   MONITOR CARD — redesigned layout
+   ================================================================ */
+/* Reset old header margin — title-row owns the spacing now */
+.monitor-card-header { margin-bottom: 0; padding: 0; }
+
+.monitor-card-title-row {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; gap: 8px; margin-bottom: 12px;
+  cursor: pointer;
+}
+.monitor-card-name-wrap {
+  display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0;
+}
+.monitor-card-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.enc-pill {
+  display: inline-block; padding: 1px 6px;
+  border-radius: 999px; font-size: 10px; font-weight: 600;
+  letter-spacing: .4px; text-transform: uppercase;
+}
+.enc-starttls { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.enc-ssl      { background: rgba(52,211,153,0.15); color: #34d399; }
+.enc-none     { background: rgba(251,191,36,0.15); color: #fbbf24; }
+
+.interval-pill {
+  display: inline-block; padding: 1px 6px;
+  border-radius: 999px; font-size: 10px; font-weight: 500;
+  background: var(--surface-3); color: var(--text-dim);
+}
+
+.monitor-card-body { cursor: pointer; }
+
+.monitor-metrics-row {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 8px; margin-bottom: 10px;
+}
+.monitor-metric {
+  background: var(--surface-3); border-radius: 6px;
+  padding: 6px 8px; display: flex; flex-direction: column; gap: 2px;
+}
+.monitor-metric-label {
+  font-size: 10px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text-dim);
+}
+.monitor-metric-value {
+  font-size: 14px; font-weight: 600; font-family: var(--font-mono);
+  color: var(--text);
+}
+
+/* Sparkline updated: responsive height */
+.monitor-sparkline-wrap {
+  position: relative; height: 48px; margin-bottom: 0;
+}
+.monitor-sparkline-wrap canvas { position: absolute; inset: 0; }
+
+.monitor-toggle-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+
+/* ================================================================
+   BATCH TABLE — improved visual density
+   ================================================================ */
+.batch-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  font-size: 12px;
+}
+.batch-table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface-2); color: var(--text-dim);
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .4px; padding: 7px 8px;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.batch-table tbody tr:hover > td { background: var(--surface-hover); }
+.batch-table tbody tr > td:first-child { color: var(--text-dim); text-align: center; }
+.batch-table td {
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle; padding: 4px 6px;
+}
+.batch-table td input,
+.batch-table td select {
+  background: transparent; border: 1px solid transparent;
+  border-radius: 4px; padding: 4px 6px; width: 100%;
+  color: var(--text); font-size: 12px; font-family: var(--font-mono);
+  transition: border-color .15s;
+}
+.batch-table td input:hover,
+.batch-table td select:hover { border-color: var(--border); }
+.batch-table td input:focus,
+.batch-table td select:focus {
+  outline: none; border-color: var(--accent);
+  background: var(--input-bg);
+}
+.batch-status-badge {
+  display: inline-block; padding: 2px 8px;
+  border-radius: 4px; font-size: 11px; font-weight: 600;
+  letter-spacing: .4px; white-space: nowrap;
+}
+.batch-status-badge.success { background: rgba(34,197,94,.15);  color: #22c55e; }
+.batch-status-badge.failed  { background: rgba(239,68,68,.15);  color: #ef4444; }
+.batch-status-badge.running { background: rgba(108,140,255,.15); color: var(--accent); }
+.batch-status-badge.skipped { background: rgba(100,100,100,.15); color: var(--text-dim); }
+.batch-detail-row > td {
+  background: var(--surface-2) !important;
+  padding: 10px 16px !important;
+}
+.batch-log-drawer {
+  font-family: var(--font-mono); font-size: 11px;
+  line-height: 1.6; color: var(--text-secondary);
+  max-height: 140px; overflow-y: auto;
 }
