@@ -697,6 +697,15 @@ function setupBatchPage() {
   $("#btn-batch-run").addEventListener("click", runBatch);
   $("#btn-batch-clear").addEventListener("click", clearBatch);
 
+  // Import
+  $("#btn-batch-import").addEventListener("click", () => $("#batch-import-file").click());
+  $("#batch-import-file").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) importBatchCSV(file);
+    e.target.value = ""; // reset so same file can be re-imported
+  });
+
+  // Export dropdown
   $("#btn-batch-export").addEventListener("click", (e) => {
     e.stopPropagation();
     const menu = $("#batch-export-menu");
@@ -985,6 +994,63 @@ async function runWithConcurrency(items, limit, fn) {
     }
     next();
   });
+}
+
+// Parse one CSV line respecting quoted fields.
+function parseCSVLine(line) {
+  const result = [];
+  let cur = "", inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQuote = !inQuote;
+    } else if (ch === ',' && !inQuote) {
+      result.push(cur.trim()); cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function importBatchCSV(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) { showToast("CSV must have a header row and at least one data row.", "warning"); return; }
+
+    const header = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/^"|"$/g, ''));
+    const get = (row, key) => {
+      const idx = header.indexOf(key);
+      return idx >= 0 ? (row[idx] || "").replace(/^"|"$/g, '') : "";
+    };
+
+    const imported = lines.slice(1).map(line => {
+      const vals = parseCSVLine(line);
+      const host = get(vals, "host");
+      if (!host) return null;
+      return {
+        id: crypto.randomUUID(),
+        host, port: parseInt(get(vals, "port")) || 587,
+        enc: get(vals, "encryption") || "starttls",
+        user: get(vals, "username") || "",
+        pass: get(vals, "password") || "",
+        from: get(vals, "from") || "",
+        to: get(vals, "to") || "",
+        subject: get(vals, "subject") || "SMTP Lab Batch Test",
+        status: "idle", result: null, liveLog: [], drawerOpen: false,
+      };
+    }).filter(Boolean);
+
+    if (imported.length === 0) { showToast("No valid rows found in CSV.", "warning"); return; }
+    batchRows.push(...imported);
+    renderBatchTable();
+    showToast(`Imported ${imported.length} row${imported.length > 1 ? "s" : ""}.`, "success");
+  };
+  reader.onerror = () => showToast("Failed to read file.", "error");
+  reader.readAsText(file);
 }
 
 function exportBatch(format) {
