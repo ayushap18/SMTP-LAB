@@ -17,5 +17,9 @@ smtp-core = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+chrono = { workspace = true }
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
+trust-dns-resolver = "0.23"
+dirs = "5"
+uuid = { version = "1", features = ["v4"] }

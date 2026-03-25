@@ -2,7 +2,7 @@
   "name": "smtp-lab",
   "displayName": "SMTP Lab",
   "description": "Test SMTP servers, debug email delivery, and view detailed handshake logs — powered by Rust.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "smtp-lab",
   "engines": {
     "vscode": "^1.85.0"
@@ -22,6 +22,14 @@
       {
         "command": "smtpLab.quickTest",
         "title": "SMTP Lab: Quick Test"
+      },
+      {
+        "command": "smtpLab.diagnose",
+        "title": "SMTP Lab: Run Diagnostics"
+      },
+      {
+        "command": "smtpLab.selectProfile",
+        "title": "SMTP Lab: Select Profile"
       }
     ],
     "configuration": {
@@ -47,6 +55,21 @@
           "enum": ["starttls", "ssl", "none"],
           "default": "starttls",
           "description": "Default encryption mode."
+        },
+        "smtpLab.defaultFrom": {
+          "type": "string",
+          "default": "",
+          "description": "Default sender email address."
+        },
+        "smtpLab.defaultTo": {
+          "type": "string",
+          "default": "",
+          "description": "Default recipient email address."
+        },
+        "smtpLab.autoDetectConfig": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect .smtplab.toml in workspace and use as defaults."
         }
       }
     }

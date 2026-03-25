@@ -26,6 +26,15 @@ pub enum SmtpLabError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("Profile error: {0}")]
+    Profile(String),
+
+    #[error("History error: {0}")]
+    History(String),
+
+    #[error("Batch error: {0}")]
+    Batch(String),
 }
 
 impl SmtpLabError {
@@ -59,6 +68,9 @@ impl SmtpLabError {
             }
             Self::Config(_) => "The provided configuration is invalid. Check all required fields.",
             Self::Io(_) => "A low-level I/O error occurred. Check network connectivity.",
+            Self::Profile(_) => "A profile operation failed. Check the profile name and config directory.",
+            Self::History(_) => "A history operation failed. Check the history directory.",
+            Self::Batch(_) => "A batch operation failed. Check the batch configuration.",
         }
     }
 }
