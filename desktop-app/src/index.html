@@ -387,6 +387,33 @@
               <label for="tpl-body">Body</label>
               <textarea id="tpl-body" rows="6" placeholder="Email body..."></textarea>
             </div>
+            <div class="form-group">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <label for="tpl-html-body" style="margin:0;">HTML Body <span class="text-dim">(optional)</span></label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+                  <input type="checkbox" id="tpl-html-toggle" />
+                  Show HTML editor
+                </label>
+              </div>
+              <textarea id="tpl-html-body" rows="8" placeholder="Paste full HTML email here..."
+                        style="display:none;font-family:var(--font-mono);font-size:12px;"></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="tpl-category">Category</label>
+                <select id="tpl-category">
+                  <option value="basic">Basic</option>
+                  <option value="transactional">Transactional</option>
+                  <option value="html">HTML</option>
+                  <option value="business">Business</option>
+                  <option value="custom" selected>Custom</option>
+                </select>
+              </div>
+              <div class="form-group flex-1">
+                <label for="tpl-description">Description <span class="text-dim">(optional)</span></label>
+                <input type="text" id="tpl-description" placeholder="Brief description..." />
+              </div>
+            </div>
             <div class="form-actions">
               <button id="btn-save-template" class="btn btn-primary">Save Template</button>
               <button id="btn-cancel-template-2" class="btn btn-secondary">Cancel</button>
@@ -394,12 +421,24 @@
           </div>
         </div>
 
+        <!-- Filter bar -->
+        <div id="tpl-filter-bar" class="tpl-filter-bar">
+          <button class="tpl-filter-btn active" data-cat="all">All</button>
+          <button class="tpl-filter-btn" data-cat="basic">Basic</button>
+          <button class="tpl-filter-btn" data-cat="transactional">Transactional</button>
+          <button class="tpl-filter-btn" data-cat="html">HTML</button>
+          <button class="tpl-filter-btn" data-cat="business">Business</button>
+          <button class="tpl-filter-btn" data-cat="custom">Custom</button>
+        </div>
+
         <!-- Template list -->
-        <div id="template-list" class="template-list">
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            <h3>No Templates</h3>
-            <p>Create reusable email templates to speed up your testing workflow.</p>
+        <div class="template-list-wrap">
+          <div id="template-list" class="template-list">
+            <div class="empty-state">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <h3>No Templates</h3>
+              <p>Create reusable email templates to speed up your testing workflow.</p>
+            </div>
           </div>
         </div>
       </div>
